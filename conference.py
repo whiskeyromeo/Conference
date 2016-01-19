@@ -14,6 +14,7 @@ __author__ = 'wesc+api@google.com (Wesley Chun)'
 
 
 from datetime import datetime
+from datetime import time
 
 import endpoints
 from protorpc import messages
@@ -36,6 +37,9 @@ from models import ConferenceForms
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
+
+from models import Session
+from models import SessionForm
 
 from settings import WEB_CLIENT_ID
 from settings import ANDROID_CLIENT_ID
@@ -73,6 +77,8 @@ FIELDS =    {
             'MONTH': 'month',
             'MAX_ATTENDEES': 'maxAttendees',
             }
+#IF the reequest contains path or querystring arguments, cannot use a
+# simple Message class. Instead you must use a ResourceContainer class.
 
 CONF_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
@@ -82,6 +88,16 @@ CONF_GET_REQUEST = endpoints.ResourceContainer(
 CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
     websafeConferenceKey=messages.StringField(1),
+)
+
+SESS_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1)
+)
+
+SESS_POST_REQUEST = endpoints.ResourceContainer(
+    SessionForm,
+    websafeConferenceKey=messages.StringField(1)
 )
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -111,7 +127,68 @@ class ConferenceApi(remote.Service):
             setattr(cf, 'organizerDisplayName', displayName)
         cf.check_initialized()
         return cf
+    #----- Session objects -------------------------------------
+    
+    def _createSessionObject(self, request):
+        """Create or update Session object, returning SessionForm/request."""
+        #preload necessary data items
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id = getUserId(user)
+        
+        if not request.name:
+            raise endpoints.BadRequestException("Session 'name' field required")
+        
+        #--- found through discussion - a1phariddum---
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        
+        if not conf:
+            raise endpoints.NotFoundException('No conf with key: %s' % request.websafeConferenceKey)
+            
+        if user_id != conf.organizerUserId:
+            raise endpoints.ForbiddenException('Only the organizer may update the conference')
+        
+        #Copy SessionForm/ProtoRPC Message into dict
+        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+        
+        #TODO : Add check for conference key, making sure that user trying to create
+        # the session is the organizer of the conference
+        
+        #Convert date from string into Date object;
+        if data['date']:
+            data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
+        # Convert times from string into Time objects
+        if date['startTime']:
+            data['startTime'] = time.strptime(data['startTime'], "%H:%M")
+        
+        if date['duration']:
+            data['duration'] = time.strptime(data['duration'], "%H:%M")
 
+        confKey = ndb.Key(urlsafe=request.websafeConferenceKey)
+        c_key = confKey.get()
+        
+        s_id = Session.allocate_ids(size=1, parent=c_key)[0]
+        s_key = ndb.Key(Session, s_id, parent=c_key)
+        
+        data['key'] = s_key
+        
+        Session(**data).put()
+        
+        return request
+    
+    @endpoints.method(SessionForm, SessionForm, path='session',
+            http_method='POST', name='createSession')
+    def createSession(self, request):
+        """Create new conference."""
+        return self._createSessionObject(request)
+            
+        
+    @endpoints.method()
+    
+    
+    #endSession
+#-------------------------------
 
     def _createConferenceObject(self, request):
         """Create or update Conference object, returning ConferenceForm/request."""
@@ -233,8 +310,20 @@ class ConferenceApi(remote.Service):
         prof = conf.key.parent().get()
         # return ConferenceForm
         return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
+    
+#-------------------------------
+    @endpoints.method(SESS_GET_REQUEST, SessionForm, 
+            path='conference/sessions/{websafeConferenceKey}',
+            http_method='GET', name='getConferenceSessions')
+    def getConferenceSessions(self, request):
+        """ Return requested sessions (by websafeConferenceKey)"""
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conf found with key: %s' % request.websafeConferenceKey)
+        sessions = conf.key.
 
-
+#--------------------------------
     @endpoints.method(message_types.VoidMessage, ConferenceForms,
             path='getConferencesCreated',
             http_method='POST', name='getConferencesCreated')
