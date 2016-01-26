@@ -86,7 +86,7 @@ class Session(ndb.Model):
     typeOfSession   = ndb.StringProperty()
     date            = ndb.DateProperty()
     startTime       = ndb.TimeProperty()
-    
+    websafeConferenceKey = ndb.StringProperty()
     
 class SessionForm(messages.Message):
     """SessionForm -- Session outbound form message"""
