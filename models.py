@@ -97,6 +97,12 @@ class SessionForm(messages.Message):
     typeOfSession   = messages.StringField(5)
     date            = messages.StringField(6) #DateTimeField()
     startTime       = messages.StringField(7) #TimeField()
+    websafeConferenceKey = messages.StringField(8)
+    organizerDisplayName = messages.StringField(9)
+
+class SessionForms(messages.Message):
+    """ConferenceForms -- multiple Conference outbound form message"""
+    items = messages.MessageField(SessionForm, 1, repeated=True)
 
 class ConferenceForms(messages.Message):
     """ConferenceForms -- multiple Conference outbound form message"""
