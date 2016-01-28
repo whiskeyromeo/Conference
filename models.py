@@ -77,7 +77,13 @@ class ConferenceForm(messages.Message):
     websafeKey      = messages.StringField(11)
     organizerDisplayName = messages.StringField(12)
 
-
+class Speaker(ndb.Model):
+    """Speaker"""
+    name            = ndb.StringProperty(required=True)
+    specialties     = ndb.StringProperty(repeated=True)
+    conferences     = ndb.StringProperty(repeated=True)
+    sessions        = ndb.StringProperty(repeated=True)
+    
 class Session(ndb.Model):
     """Session -- Session object"""
     name            = ndb.StringProperty(required=True)

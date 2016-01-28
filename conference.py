@@ -46,6 +46,8 @@ from models import SessionForm
 from models import SessionQueryForm
 from models import SessionQueryForms
 
+from models import Speaker
+
 from settings import WEB_CLIENT_ID
 from settings import ANDROID_CLIENT_ID
 from settings import IOS_CLIENT_ID
@@ -88,7 +90,8 @@ SESS_FIELDS = {
     'NAME': 'name',
     'HIGHLIGHTS': 'highlights',
     'SPEAKER': 'speaker',
-    'DURATION': 'duration'
+    'DURATION': 'duration',
+    'START': 'startTime'
 }
 
 
@@ -121,9 +124,10 @@ SESS_TYPE_REQUEST = endpoints.ResourceContainer(
     sessionType=messages.StringField(2)
 )
 
-SESS_POST_REQUEST = endpoints.ResourceContainer(
-    SessionForm,
-    websafeConferenceKey=messages.StringField(1)
+SESS_TIME_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    time=messages.StringField(1),
+    sessionType=messages.StringField(2)
 )
 
 WISHLIST_GET_REQUEST = endpoints.ResourceContainer(
@@ -131,8 +135,6 @@ WISHLIST_GET_REQUEST = endpoints.ResourceContainer(
     sessionKey=messages.StringField(1)
 )
 
-class AllClearResponse(messages.Message):
-    response = messages.StringField(1)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -216,6 +218,19 @@ class ConferenceApi(remote.Service):
         #Commit to the datastore
         Session(**data).put()
         
+        if data['speaker']:
+            speaker = Speaker.query(Speaker.name == data['speaker']).get()
+            
+            if not speaker:
+                speaker = Speaker()
+                speaker.populate(
+                    name=data['speaker'],
+                    sessions=[data['sessionKey']])
+                speaker.put()
+            else:
+                speaker.sessions.append(data['sessionKey'])
+                speaker.put()
+            
         return request
     
     #Create a Session
@@ -270,6 +285,7 @@ class ConferenceApi(remote.Service):
             formatted_filters.append(filtr)
         return (inequality_field, formatted_filters)
     
+    # Allows addition of filters to querySessions
     def _getSessionQuery(self, request):
         """Return formatted query from submitted filters"""
         q = Session.query()
@@ -287,6 +303,7 @@ class ConferenceApi(remote.Service):
             q = q.filter(formatted_query)
         return q
     
+    # General session query, option of added filters
     @endpoints.method(SessionQueryForms, SessionForms,
             path='querySessions',
             http_method='POST',
@@ -324,13 +341,59 @@ class ConferenceApi(remote.Service):
             http_method='GET',
             name='getConferenceSessionsBySpeaker')
     def getConferenceSessionsBySpeaker(self,request):
-        """Query for sessions by speaker"""
+        """Query for sessions by speaker using the Session entity"""
         q = Session.query()
         q = q.filter(Session.speaker == request.speaker)
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in q]
         )
+    
+    # getAllSessionsForSpeaker(speaker)
+    @endpoints.method(SESS_SPEAKER_REQUEST, SessionForms,
+            path='getAllSessionsForSpeaker',
+            http_method='GET',
+            name='getAllSessionsForSpeaker')
+    def getAllSessionsForSpeaker(self, request):
+        """Retrieve all sessions for a given speaker using the Speaker entity"""
+        q_speaker = Speaker.query()
+        q_speaker = q_speaker.filter(Speaker.name == request.speaker).get()
+        print 'q_speaker : ', q_speaker
         
+        q_sess = Session.query()
+        sessions = []
+        
+        for key in q_speaker.sessions:
+            print 'Session key = ',key
+            sess = ndb.Key(urlsafe=key).get()
+            sessions.append(sess)
+        
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
+
+    def _checkType(self, session):
+        val = str(getattr(session, 'typeOfSession'))
+        if val == 'workshop':
+            return True
+        return False
+    
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+            path='getSessionByTime',
+            http_method='GET',
+            name='getSessionByTime')
+    def getSessionByTime(self, request):
+        """Query for sessions which are not workshops and
+        where the startTime is before 7pm"""
+        checkTime = '19:00'
+        time = datetime.strptime(checkTime[:5], "%H:%M").time()
+        print 'time: ', time
+        q = Session.query()
+        q = q.filter(Session.startTime < time)
+        sessions = [i for i in q if not self._checkType(i)]
+        
+        return SessionForms(
+            items=[self._copySessionToForm(sess) for sess in sessions]
+        )
 
     #Get Sessions created by User
     @endpoints.method(message_types.VoidMessage, SessionForms, 
@@ -341,14 +404,11 @@ class ConferenceApi(remote.Service):
         #check that user is authed
         user = endpoints.get_current_user()
         if not user:
-            raise endpoints.UnauthorizedException('Authorization requeired')
+            raise endpoints.UnauthorizedException('Authorization required')
         user_id = getUserId(user)
         
         #create an ancestor query for all key matches to the user
         sessions = Session.query(ancestor=ndb.Key(Profile, user_id))
-        print '-- Sessions: --'
-        print sessions
-        print "-- EndSession -- "
         prof = ndb.Key(Profile, user_id).get()
         
         #return set of ConferenceForm objects per Conference
@@ -356,21 +416,8 @@ class ConferenceApi(remote.Service):
             items=[self._copySessionToForm(sess, getattr(prof, 'displayName')) for sess in sessions]
         )
 
-# - - Session Wishlist - - - - - - - - - - - - 
-    
-    # - - Update previously created sessions to have sessionKey - - 
-    @endpoints.method(message_types.VoidMessage, message_types.VoidMessage,
-            path='conference/session/updateAll',
-            http_method='POST',
-            name='updateAllSessions')
-    def updateAllSessions(self, request):
-        """Add sessionKeys to all of the previously created session"""
-        sessions = Session.query()
-        for session in sessions:
-            s_key = session.key.urlsafe()
-            session.sessionKey = s_key
-            session.put()
-        return request
+
+# - - - - Session WishList - - - - - - 
     
     @ndb.transactional(xg=True)
     def _wishListAddition(self, request, add=True):
