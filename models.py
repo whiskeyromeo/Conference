@@ -77,12 +77,19 @@ class ConferenceForm(messages.Message):
     websafeKey      = messages.StringField(11)
     organizerDisplayName = messages.StringField(12)
 
+class SpeakerForm(messages.Message):
+    """SpeakerForm - Speaker outbound form message"""
+    name            = messages.StringField(1)
+    featuredSpeaker = messages.StringField(2)
+    
+class SpeakerForms(messages.Message):
+    items = messages.MessageField(SpeakerForm, 1, repeated=True)
+    
 class Speaker(ndb.Model):
     """Speaker"""
     name            = ndb.StringProperty(required=True)
-    specialties     = ndb.StringProperty(repeated=True)
-    conferences     = ndb.StringProperty(repeated=True)
     sessions        = ndb.StringProperty(repeated=True)
+    featuredSpeaker = ndb.BooleanProperty(default=False)
     
 class Session(ndb.Model):
     """Session -- Session object"""
@@ -93,8 +100,7 @@ class Session(ndb.Model):
     typeOfSession   = ndb.StringProperty()
     date            = ndb.DateProperty()
     startTime       = ndb.TimeProperty()
-    websafeConferenceKey = ndb.StringProperty()
-    organizerDisplayName = ndb.StringProperty()
+    websafeConfKey  = ndb.StringProperty()
     sessionKey      = ndb.StringProperty()
     
 class SessionForm(messages.Message):
@@ -106,8 +112,8 @@ class SessionForm(messages.Message):
     typeOfSession   = messages.StringField(5)
     date            = messages.StringField(6) #DateTimeField()
     startTime       = messages.StringField(7) #TimeField()
-    websafeConferenceKey = messages.StringField(8)
-    organizerDisplayName = messages.StringField(9)
+    websafeConfKey  = messages.StringField(8)
+    displayName     = messages.StringField(9)
     sessionKey      = messages.StringField(10)
 
 class SessionForms(messages.Message):
