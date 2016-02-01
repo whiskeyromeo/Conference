@@ -201,9 +201,9 @@ class ConferenceApi(remote.Service):
             raise endpoints.BadRequestException("Session 'name' field required")
         
         # Check that the name is unique
-        name_check = Session.query(Session.name==request.name)
+        name_check = Session.query(Session.name==request.name).get()
         if name_check:
-            raise endpoints.ConflictsException("Entity with name '%s' already exists" % request.name)
+            raise endpoints.BadRequestException("Entity with name '%s' already exists" % request.name)
         
         c_key = ndb.Key(urlsafe=request.websafeConfKey)
 
@@ -218,8 +218,7 @@ class ConferenceApi(remote.Service):
         
         #Copy SessionForm/ProtoRPC Message into dict
         data = {field.name: getattr(request, field.name) for field in request.all_fields()}
-        del data['featuredSpeaker']
-        
+        del data['displayName']
         data['websafeConfKey'] = request.websafeConfKey
         
         #Convert date from string into Date object;
