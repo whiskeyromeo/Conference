@@ -37,6 +37,7 @@ App Engine application for the Udacity training course.
 ### Serving App
 
 **Serving at :** https://striking-shadow-119316.appspot.com
+
 **Explorer :** https://striking-shadow-119316.appspot.com/_ah/api/explorer
 
 ### Sessions
@@ -45,25 +46,26 @@ The Implementation of the Session kind was done in line with
 what was previously implemented with the Conference Object. I 
 followed the same logic, with some minor changes as required for
 the use of the TimeProperty in the Session, which calls for the 
-use of a time object from the datetime module.
+use of a time object from the datetime module. I tried to keep
+close to what the spec called for in regards to the creation of the
+Session entity and included only those properties that were listed.
 
 The websafeConfKey and SessionKey for each session are displayed in the
 SessionForm to provide for easy access to the information for use in the
 queries and methods implemented in conference.py.
 
 For the date property, the DateProperty was chosen since the only the 
-date is needed. This is converted to a date object and stored in the datastore.
+date is needed. This is converted to a datetime object and stored in the datastore.
 
 The duration property is set as a stringProperty since it represents a 
 length of time and not a fixed point in time. A check is implemented to ensure that
-the duration can be converted to a datetime object before the duration can be stored.
+the duration can be converted to a datetime time object before the duration can be stored.
 This allows for the use of datetime methods on the value at a future point 
 so that further queries or methods involving the startTime can be implemented
 (such as finding the end time of the session using [timedelta][10]). The current
 setup does limit the duration to 24 hours(which seems like it would be more than 
 sufficient for most presentations), however it provides an effective check to 
-ensure that the representation of the time is properly formatted. Once checks are in place
-to ensure the proper formatting, the check could be removed.
+ensure that the representation of the time is properly formatted.
 
 The startTime property was implemented as a TimeProperty since it represents
 a fixed point in time. Since the spec for the project called for the 
@@ -88,6 +90,11 @@ for the purpose of setting the Featured Speaker for a given Conference.
 
 I ended up only saving the name and key of the Speaker in the entities, 
 and referencing the urlsafe key of the speaker in the Session methods.
+No other properties are included with the Speaker entity as of yet since
+currently there are no methods which require other properties. I have considered
+adding specialties or notable projects/links to the kind, however at this
+moment it seemed unnecessary.
+
 The speakers were set up independently from the Conferences 
 since I felt it was likely that a speaker might be present at multiple conferences.
 Speakers are also technically independent from Sessions since from what I 
@@ -103,12 +110,20 @@ the inclusion of the speaker field in the Session entity.
     the restriction on datastore queries which allows the inequality filter
     to be used on one property of the entity per query. In order to correct for this
     I chose to query the datastore with a comparison filter for the time
-    and used a [list comprehension][9] to filter out the workshop type from the result
-    of the datastore query. I chose the list comprehension because it is more verbose
+    and used a python list comprehension to filter out the workshop type from the result
+    of the datastore query([here][9] is a great link describing the logic behind the use
+    of list comprehensions). I chose the list comprehension because it is more verbose
     and easier to understand the mechanism by which the list was being filtered.
     I believe the same result could have been achieved by inverting the filtration( type != workshop first,
     time comparison second) and using a map or filter method on the result obtained
     by the initial query to the Datastore.
+    
+    The rubric does not seem to require that all sessions come from a particular conference,
+    so that feature was not implemented. However, this would be very easy to do 
+    by requiring a websafeConferenceKey in the request and then calling the query as follows:
+    ```
+        Session.query(ancestor=websafeConferenceKey)
+    ```
 - **Queries by Date ( getSessionsBeforeDate, getConferencesBeforeDate) :**
     A couple of the queries I added filter the respective entities
     based on the date provided by the user
@@ -138,7 +153,7 @@ a bit.
 
 [7]: http://stackoverflow.com/questions/24392270/many-to-many-relationship-in-ndb
 [8]: https://discussions.udacity.com/t/localhost-getconferencecreated-error/38247/2
-[9]: http://www.python-course.eu/list_comprehension.php
+[9]: http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Comprehensions.html
 [10]: http://stackoverflow.com/questions/18303301/working-with-time-values-greater-than-24-hours
 #### Me
 Will Russell

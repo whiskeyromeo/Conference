@@ -98,8 +98,8 @@ class SpeakerForms(messages.Message):
 
 class Speaker(ndb.Model):
     """Speaker"""
-    name            = ndb.StringProperty(required=True)
-
+    name = ndb.StringProperty(required=True)
+    
 class Session(ndb.Model):
     """Session -- Session object"""
     name = ndb.StringProperty(required=True)

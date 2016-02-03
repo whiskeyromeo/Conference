@@ -31,7 +31,7 @@ class SetAnnouncementHandler(webapp2.RequestHandler):
 
 
 class SetFeaturedSpeaker(webapp2.RequestHandler):
-
+    # Using post seems to be triggered more often?
     def post(self):
         """Set the featured speaker in Memcache"""
         ConferenceApi._cacheFeaturedSpeaker(self.request.get('sessionKey'))

@@ -16,7 +16,7 @@ __author__ = 'wesc+api@google.com (Wesley Chun)'
 from datetime import datetime
 from datetime import time
 
-import random
+import json
 import endpoints
 
 from protorpc import messages
@@ -209,7 +209,7 @@ class ConferenceApi(remote.Service):
         
         c_key = ndb.Key(urlsafe=request.websafeConfKey)
 
-        # Check that the name is unique
+        # Check that the name is unique within the conference
         name_check = Session.query(ancestor=c_key)
         name_check = name_check.filter(Session.name==request.name).get()
         
@@ -260,6 +260,7 @@ class ConferenceApi(remote.Service):
         data['key'] = s_key
         
         if data['speaker']:
+            print 'In createSession, there is a speaker...'
             # Check to see if the speaker already exists
             speaker = Speaker.query(Speaker.name == data['speaker']).get()
 
@@ -270,11 +271,14 @@ class ConferenceApi(remote.Service):
                 speaker = Speaker()
                 speaker.populate(
                     key=speaker_key,
-                    name=data['speaker'])
+                    name=data['speaker']
+                )
+                
                 speaker.put()
             else:
                 speaker_key = speaker.key
             
+        
             # Set the session speaker to the speaker's urlsafe key
             data['speaker'] = speaker_key.urlsafe()
             
@@ -298,38 +302,42 @@ class ConferenceApi(remote.Service):
     @staticmethod
     def _cacheFeaturedSpeaker(session_key):
         """Assign Featured Speaker to memcache; used by getFeaturedSpeaker"""
+        # Use the urlsafe key to grab the session key
         session = ndb.Key(urlsafe=session_key).get()
+        # Set the key for the memcache based on the confKey
+        featured = 'fs_' + str(session.key.parent().urlsafe())     
+        print 'In cacheFeaturedSpeaker'
+        # Get all of the sessions for the conference
+        sessions = Session.query(ancestor=session.key.parent()).fetch()
+        count = 0
+        # Iterate through the sessions to find the speaker with the most sessions
+        for sess in sessions:
+            spk_sess = Session.query(ancestor=session.key.parent()).filter(Session.speaker==sess.speaker)
+            spk_count = spk_sess.count()
+            if spk_count > count:
+                count = spk_count
+                # Save the speaker and sessions for the speaker with the most
+                featured_speaker = sess.speaker
+                fs_sessions = spk_sess
+        # Grab the speaker
+        speaker = ndb.Key(urlsafe=featured_speaker).get()
+        # Set the speaker name and their sessions in a string
+        fs_data = {}
+        fs_data['name'] = speaker.name
+        fs_data['sessions'] = []
+        for sess in fs_sessions:
+            fs_data['sessions'].append(sess.name)
+        mem_val = json.dumps(fs_data)
+        # Set the created json string in memcache
+        memcache.set(key=featured, value=fs_data)
         
-        featured = 'fs_' + str(session.key.parent().urlsafe())
-        
-        speaker = ndb.Key(urlsafe=session.speaker).get()
-        current_fs = memcache.get(featured) or None
-        # Get the current featured speaker for the conference
-        cfs = Speaker.query(Speaker.name==current_fs).get()
-        
-        if current_fs is None:
-            memcache.set(key=featured, value=speaker.name)
-        elif cfs.key != speaker.key:
-            # Get the session count for the current and prospective speakers
-            cfs_count = Session.query().filter(Session.speaker==cfs.key.urlsafe()).count()
-            spk_count = Session.query().filter(Session.speaker==session.speaker).count()
-            # If the new speaker's session count is higher,
-            # they are the new featured spaeker
-            if spk_count > cfs_count:
-                memcache.set(key=featured, value=speaker.name)
-            elif spk_count == cfs_count:
-                # If the session counts are equal, flip a coin
-                outcome = random.randrange(2)
-                if outcome == 0:
-                    memcache.set(key=featured, value=speaker.name)
-                
     @endpoints.method(CONF_GET_REQUEST, StringMessage,
                       path='conference/{websafeConferenceKey}/getFeaturedSpeaker',
                       http_method='GET',
                       name='getFeaturedSpeaker')
     def getFeaturedSpeaker(self, request):
         fs_conf = 'fs_' + str(request.websafeConferenceKey)
-        return StringMessage(data=memcache.get(fs_conf) or 'No featured speaker found.')
+        return StringMessage(data=json.dumps(memcache.get(fs_conf)) or 'No featured speaker found.')
         
 
     # Task 3 - Additional Queries - Get All speakers
@@ -535,6 +543,7 @@ class ConferenceApi(remote.Service):
         startDate = datetime.strptime(request.startDate[:10], "%Y-%m-%d")
         q = Session.query()
         q = q.filter(Session.date < startDate)
+        q = q.filter(Session.date != None)
         return SessionForms(
             items=[self._copySessionToForm(sess) for sess in q]
         )
@@ -554,6 +563,7 @@ class ConferenceApi(remote.Service):
 
         q = Conference.query()
         q = q.filter(Conference.startDate < startDate)
+        q = q.filter(Conference.startDate != None)
         return ConferenceForms(
             items=[self._copyConferenceToForm(conf, '') for conf in q]
         )
@@ -576,6 +586,7 @@ class ConferenceApi(remote.Service):
         time = datetime.strptime(checkTime[:5], "%H:%M").time()
         q = Session.query()
         q = q.filter(Session.startTime < time)
+        q = q.filter(Session.startTime != None)
         sessions = [i for i in q if not self._checkType(i)]
 
         return SessionForms(
