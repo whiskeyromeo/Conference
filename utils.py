@@ -34,7 +34,7 @@ def getUserId(user, id_type="email"):
                 time.sleep(wait)
                 wait = wait + i
         return user.get('user_id', '')
-
+ 
     if id_type == "custom":
         # implement your own user_id creation and getting algorythm
         # this is just a sample that queries datastore for an existing profile
