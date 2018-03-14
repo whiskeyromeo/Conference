@@ -2,7 +2,7 @@
 
 """models.py
 
-Udacity conference server-side Python App Engine data & ProtoRPC models
+Conference server-side Python App Engine data & ProtoRPC models
 
 """
 
